@@ -13,6 +13,6 @@ public record WatcherConfig(
         long pollIntervalQty,
         ChronoUnit pollIntervalUnit,
         String outputPath,
-        String outputFileNameTemplate
+        String outputFilenamePrefix
 ) {
 }

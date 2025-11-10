@@ -15,6 +15,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +36,11 @@ public class WatcherRunner implements Runnable {
     /** Pre-built request for getting the url to then query live status. */
     private final HttpRequest signedUrlGetter;
     /** Api url to fetch the signed url for the live status. */
-    private static final String SIGNED_URL_GETTER_URL = "https://tikrec.com/tiktok/room/api/sign?unique_id=";
+    private static final String SIGNED_URL_GETTER_URL =
+        "https://tikrec.com/tiktok/room/api/sign?unique_id=";
+    /** Date formatter for putting timestamps on file names. */
+    private static final DateTimeFormatter DATE_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
     /**
      * Default constructor.
@@ -118,18 +124,25 @@ public class WatcherRunner implements Runnable {
             if (outPath.charAt(outPath.length() - 1) != '/') {
                 outPath += "/";
             }
-            String fileNameTemplate = watcherConfig.outputFileNameTemplate();
-            if (fileNameTemplate == null || fileNameTemplate.isEmpty()) {
-                fileNameTemplate = watcherConfig.channel() + "_%Y-%m-%d_%H-%M-%S.mp4";
+            String filenamePrefix = watcherConfig.outputFilenamePrefix();
+            if (filenamePrefix == null || filenamePrefix.isEmpty()) {
+                filenamePrefix = watcherConfig.channel();
             }
-            File outFile = new File(outPath + fileNameTemplate);
+            LocalDateTime dateTime = LocalDateTime.now();
+            filenamePrefix += "_" + dateTime.format(DATE_FORMATTER) + ".mkv";
+            File outFile = new File(outPath + filenamePrefix);
             outFile.getParentFile().mkdirs();
             ProcessBuilder pb = new ProcessBuilder(
-                    ffmpeg, "-i", url, "-c", "copy", "-f", "segment", "-segment_time", "1800", "-strftime",
-                    "1", outFile.getAbsolutePath());
+                ffmpeg, "-i", url, "-c:v", "libx264", "-c:a", "aac", "-strftime", "1",
+                outFile.getAbsolutePath());
+            pb.command().forEach(s -> System.out.print(s + " "));
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
             final Process p = pb.start();
             Thread hook = new Thread(() -> {
                 try {
+                    System.out.println("Gracefully shutting down recording for "
+                        + watcherConfig.channel());
                     p.getOutputStream().write("q\n".getBytes());
                     p.getOutputStream().flush();
                 } catch (IOException e) {
@@ -139,6 +152,7 @@ public class WatcherRunner implements Runnable {
             Runtime.getRuntime().addShutdownHook(hook);
             p.waitFor();
             Runtime.getRuntime().removeShutdownHook(hook);
+            new Thread(new ConvertToMP4()).start();
         } catch (InterruptedException | IOException e) {
             throw new RuntimeException(e);
         }
