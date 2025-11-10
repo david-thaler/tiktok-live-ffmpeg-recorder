@@ -11,6 +11,8 @@ import java.time.temporal.ChronoUnit;
 public record WatcherConfig(
         String channel,
         long pollIntervalQty,
-        ChronoUnit pollIntervalUnit
+        ChronoUnit pollIntervalUnit,
+        String outputPath,
+        String outputFileNameTemplate
 ) {
 }

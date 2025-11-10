@@ -5,6 +5,7 @@ import me.davidthaler.tiktokliverecorder.config.WatcherConfig;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -68,7 +69,8 @@ public class WatcherRunner implements Runnable {
                     startRecording();
                 } else {
                     System.out.println("user " + watcherConfig.channel() + " is NOT live");
-                    System.out.println("Checking again in " + watcherConfig.pollIntervalQty() + " " + watcherConfig.pollIntervalUnit());
+                    System.out.println("Checking again in " + watcherConfig.pollIntervalQty() + " "
+                            + watcherConfig.pollIntervalUnit());
                 }
             } catch (IOException | InterruptedException | URISyntaxException e) {
                 throw new RuntimeException(e);
@@ -109,9 +111,22 @@ public class WatcherRunner implements Runnable {
             if (ffmpeg == null || ffmpeg.isEmpty()) {
                 ffmpeg = "ffmpeg";
             }
+            String outPath = watcherConfig.outputPath();
+            if (outPath == null || outPath.isEmpty()) {
+                outPath = "out/" + watcherConfig.channel();
+            }
+            if (outPath.charAt(outPath.length() - 1) != '/') {
+                outPath += "/";
+            }
+            String fileNameTemplate = watcherConfig.outputFileNameTemplate();
+            if (fileNameTemplate == null || fileNameTemplate.isEmpty()) {
+                fileNameTemplate = watcherConfig.channel() + "_%Y-%m-%d_%H-%M-%S.mp4";
+            }
+            File outFile = new File(outPath + fileNameTemplate);
+            outFile.getParentFile().mkdirs();
             ProcessBuilder pb = new ProcessBuilder(
                     ffmpeg, "-i", url, "-c", "copy", "-f", "segment", "-segment_time", "1800", "-strftime",
-                    "1", "W:\\" + watcherConfig.channel() + "_%Y-%m-%d_%H-%M-%S.mp4");
+                    "1", outFile.getAbsolutePath());
             final Process p = pb.start();
             Thread hook = new Thread(() -> {
                 try {
