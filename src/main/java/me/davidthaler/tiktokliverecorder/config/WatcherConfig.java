@@ -13,6 +13,18 @@ public record WatcherConfig(
         long pollIntervalQty,
         ChronoUnit pollIntervalUnit,
         String outputPath,
-        String outputFilenamePrefix
+        String outputFilenamePrefix,
+        Boolean keepMKVFiles
 ) {
+
+    /**
+     * Overrides default keepMKVFiles getter to default it to false.
+     * @return Should we keep MKV files after converting to mp4?
+     */
+    public Boolean keepMKVFiles() {
+        boolean keep = false;
+        if (keepMKVFiles != null) keep = keepMKVFiles;
+        return keep;
+    }
+
 }

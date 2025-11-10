@@ -35,6 +35,10 @@ public class WatcherRunner implements Runnable {
     private final ObjectMapper objectMapper;
     /** Pre-built request for getting the url to then query live status. */
     private final HttpRequest signedUrlGetter;
+    /** Output directory for this recorder instance. */
+    private final File OUTPUT_DIRECTORY;
+    /** Instance of the Convert to MP4 runner to be executed after every recording. */
+    private final ConvertToMP4 CONVERTER_JOB_RUNNER;
     /** Api url to fetch the signed url for the live status. */
     private static final String SIGNED_URL_GETTER_URL =
         "https://tikrec.com/tiktok/room/api/sign?unique_id=";
@@ -62,6 +66,18 @@ public class WatcherRunner implements Runnable {
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
+        String outPath = watcherConfig.outputPath();
+        if (outPath == null || outPath.isEmpty()) {
+            outPath = "out/" + watcherConfig.channel();
+        }
+        if (outPath.charAt(outPath.length() - 1) != '/') {
+            outPath += "/";
+        }
+        OUTPUT_DIRECTORY = new File(outPath);
+        OUTPUT_DIRECTORY.mkdirs();
+        CONVERTER_JOB_RUNNER = new ConvertToMP4(OUTPUT_DIRECTORY, appConfig, watcherConfig);
+        // Cleanup anything left over.
+        new Thread(CONVERTER_JOB_RUNNER).start();
     }
 
     /**
@@ -117,21 +133,13 @@ public class WatcherRunner implements Runnable {
             if (ffmpeg == null || ffmpeg.isEmpty()) {
                 ffmpeg = "ffmpeg";
             }
-            String outPath = watcherConfig.outputPath();
-            if (outPath == null || outPath.isEmpty()) {
-                outPath = "out/" + watcherConfig.channel();
-            }
-            if (outPath.charAt(outPath.length() - 1) != '/') {
-                outPath += "/";
-            }
             String filenamePrefix = watcherConfig.outputFilenamePrefix();
             if (filenamePrefix == null || filenamePrefix.isEmpty()) {
                 filenamePrefix = watcherConfig.channel();
             }
             LocalDateTime dateTime = LocalDateTime.now();
             filenamePrefix += "_" + dateTime.format(DATE_FORMATTER) + ".mkv";
-            File outFile = new File(outPath + filenamePrefix);
-            outFile.getParentFile().mkdirs();
+            File outFile = new File(OUTPUT_DIRECTORY, filenamePrefix);
             ProcessBuilder pb = new ProcessBuilder(
                 ffmpeg, "-i", url, "-c:v", "libx264", "-c:a", "aac", "-strftime", "1",
                 outFile.getAbsolutePath());
@@ -152,7 +160,7 @@ public class WatcherRunner implements Runnable {
             Runtime.getRuntime().addShutdownHook(hook);
             p.waitFor();
             Runtime.getRuntime().removeShutdownHook(hook);
-            new Thread(new ConvertToMP4()).start();
+            new Thread(CONVERTER_JOB_RUNNER).start();
         } catch (InterruptedException | IOException e) {
             throw new RuntimeException(e);
         }
@@ -165,15 +173,23 @@ public class WatcherRunner implements Runnable {
      * @throws IOException Thrown if an error occurs while executing yt-dlp.
      */
     private String getRecordingUrl() throws IOException {
+        String url = null;
         String ytdlp = appConfig.ytdlpPath();
         if (ytdlp == null || ytdlp.isEmpty()) {
             ytdlp = "yt-dlp";
         }
-        Process p = new ProcessBuilder(ytdlp, "-g", "https://www.tiktok.com/@"
-                + watcherConfig.channel() + "/live").start();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-            return br.readLine();
+        // Give it multiple tries, seems that yt-dlp sometimes randomly returns null.
+        for (int i = 0; i < 5; i++ ) {
+            Process p = new ProcessBuilder(ytdlp, "-g", "https://www.tiktok.com/@"
+                    + watcherConfig.channel() + "/live").start();
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                url = br.readLine();
+                if (url != null) {
+                    break;
+                }
+            }
         }
+        return url;
     }
 
 }
