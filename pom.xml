@@ -9,6 +9,13 @@
 
   <name>tiktok-live-ffmpeg-recorder</name>
 
+  <scm>
+    <connection>scm:git:https://github.com/davidthaler/tiktok-live-recorder.git</connection>
+    <developerConnection>scm:git:git@github.com:davidthaler/tiktok-live-recorder.git</developerConnection>
+    <url>https://github.com/davidthaler/tiktok-live-recorder</url>
+    <tag>HEAD</tag>
+  </scm>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>25</maven.compiler.source>

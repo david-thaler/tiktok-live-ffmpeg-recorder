@@ -1,0 +1,96 @@
+name: Release with Maven Release Plugin and push Docker to Docker Hub
+
+on:
+  push:
+    branches: [ master ]
+
+permissions:
+  contents: write  # to push the release commits and tags
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Configure Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare Maven release (auto-suggested versions)
+        run: |
+          mvn -B -DpushChanges=true -DscmCommentPrefix="[skip ci] " -Darguments="-DskipTests" release:prepare
+
+      - name: Perform Maven release (build from the tagged commit without deploy)
+        run: |
+          mvn -B -Darguments="-DskipTests" -Dgoals=install release:perform
+
+      - name: Extract release version and tag
+        id: rel
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_ID=$(mvn -q -DforceStdout help:evaluate -Dexpression=project.artifactId)
+          TAG=$(grep -E "^scm\\.tag=" release.properties | cut -d'=' -f2)
+          if [[ -z "$TAG" ]]; then
+            echo "Could not determine scm.tag from release.properties" >&2
+            exit 1
+          fi
+          # Try to read the version for this artifact, fallback to parse from tag suffix
+          RELEASE_VERSION=$(grep -E "^project\\.rel\\.${ARTIFACT_ID}=" release.properties | cut -d'=' -f2 || true)
+          if [[ -z "${RELEASE_VERSION:-}" ]]; then
+            RELEASE_VERSION=${TAG##*-}
+          fi
+          echo "RELEASE_VERSION=$RELEASE_VERSION" | tee -a $GITHUB_ENV
+          echo "RELEASE_TAG=$TAG" | tee -a $GITHUB_ENV
+          echo "artifactId=$ARTIFACT_ID" >> $GITHUB_OUTPUT
+          echo "version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check out the release tag for building the image
+        run: |
+          git fetch --tags
+          git checkout ${{ env.RELEASE_TAG }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute Docker image name
+        id: img
+        shell: bash
+        run: |
+          REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/$REPO_NAME" | tee -a $GITHUB_ENV
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            docker.io/${{ env.IMAGE }}:${{ env.RELEASE_VERSION }}
+            docker.io/${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output summary
+        run: |
+          echo "Released version: ${{ env.RELEASE_VERSION }}"
