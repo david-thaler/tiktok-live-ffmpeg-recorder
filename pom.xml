@@ -10,9 +10,9 @@
   <name>tiktok-live-ffmpeg-recorder</name>
 
   <scm>
-    <connection>scm:git:https://github.com/davidthaler/tiktok-live-recorder.git</connection>
-    <developerConnection>scm:git:https://github.com/davidthaler/tiktok-live-recorder.git</developerConnection>
-    <url>https://github.com/davidthaler/tiktok-live-recorder</url>
+    <connection>scm:git:https://github.com/david-thaler/tiktok-live-ffmpeg-recorder.git</connection>
+    <developerConnection>scm:git:https://github.com/david-thaler/tiktok-live-ffmpeg-recorder.git</developerConnection>
+    <url>https://github.com/david-thaler/tiktok-live-ffmpeg-recorder</url>
     <tag>HEAD</tag>
   </scm>
 
