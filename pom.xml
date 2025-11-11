@@ -11,7 +11,7 @@
 
   <scm>
     <connection>scm:git:https://github.com/davidthaler/tiktok-live-recorder.git</connection>
-    <developerConnection>scm:git:git@github.com:davidthaler/tiktok-live-recorder.git</developerConnection>
+    <developerConnection>scm:git:https://github.com/davidthaler/tiktok-live-recorder.git</developerConnection>
     <url>https://github.com/davidthaler/tiktok-live-recorder</url>
     <tag>HEAD</tag>
   </scm>
