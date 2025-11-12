@@ -49,7 +49,7 @@ jobs:
 
       - name: Switch to tag and to release to docker
         run: |
-          git switch tiktok-live-ffmpeg-recorder-${{ env.RELEASE_VERSION }}
+          git checkout tiktok-live-ffmpeg-recorder-${{ env.RELEASE_VERSION }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
