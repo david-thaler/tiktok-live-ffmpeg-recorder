@@ -45,7 +45,7 @@ jobs:
 
       - name: Perform Maven release (build from the tagged commit without deploy)
         run: |
-          mvn -B release:perform
+          mvn -B -Dgoals=install release:perform
 
       - name: Switch to tag and to release to docker
         run: |
