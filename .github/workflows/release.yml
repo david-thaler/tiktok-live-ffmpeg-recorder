@@ -35,19 +35,21 @@ jobs:
 
       - name: Prepare Maven release (auto-suggested versions)
         run: |
-          mvn -B -DpushChanges=true -DscmCommentPrefix="[skip ci] " -Darguments="-DskipTests" release:prepare
+          mvn -B -DscmCommentPrefix="[skip ci] " release:prepare
+
+      - name: Extract release version and tag
+        run: |
+          export RELEASE_VERSION=$(grep '^project.rel' release.properties | cut -d'=' -f2)
+          echo "RELEASE_VERSION=$RELEASE_VERSION" | tee -a $GITHUB_ENV
+          echo "version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
 
       - name: Perform Maven release (build from the tagged commit without deploy)
         run: |
-          mvn -B -Darguments="-DskipTests" -Dgoals=install release:perform
+          mvn -B release:perform
 
-      - name: Extract release version and tag
-        id: rel
-        shell: bash
+      - name: Switch to tag and to release to docker
         run: |
-          export RELEASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "RELEASE_VERSION=$RELEASE_VERSION" | tee -a $GITHUB_ENV
-          echo "version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+          git switch tiktok-live-ffmpeg-recorder-${{ env.RELEASE_VERSION }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
