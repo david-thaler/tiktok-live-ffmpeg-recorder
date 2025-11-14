@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -140,9 +141,17 @@ public class WatcherRunner implements Runnable {
             LocalDateTime dateTime = LocalDateTime.now();
             filenamePrefix += "_" + dateTime.format(DATE_FORMATTER) + ".mkv";
             File outFile = new File(OUTPUT_DIRECTORY, filenamePrefix);
-            ProcessBuilder pb = new ProcessBuilder(
-                ffmpeg, "-i", url, "-c:v", "libx264", "-c:a", "aac", "-strftime", "1",
-                outFile.getAbsolutePath());
+            List<String> params = new ArrayList<>();
+            params.addAll(List.of(ffmpeg, "-i", url));
+            List<String> copyParams;
+            if (appConfig.encodeWhileDownloading()) {
+                copyParams = List.of("-c:v", "libx264", "-c:a", "aac");
+            } else {
+                copyParams = List.of("-c", "copy");
+            }
+            params.addAll(copyParams);
+            params.addAll(List.of("-strftime", "1", outFile.getAbsolutePath()));
+            ProcessBuilder pb = new ProcessBuilder(params);
             pb.command().forEach(s -> System.out.print(s + " "));
             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
             pb.redirectError(ProcessBuilder.Redirect.INHERIT);

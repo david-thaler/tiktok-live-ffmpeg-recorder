@@ -14,8 +14,7 @@ public record WatcherConfig(
         ChronoUnit pollIntervalUnit,
         String outputPath,
         String outputFilenamePrefix,
-        Boolean keepMKVFiles
-) {
+        Boolean keepMKVFiles) {
 
     /**
      * Overrides default keepMKVFiles getter to default it to false.
