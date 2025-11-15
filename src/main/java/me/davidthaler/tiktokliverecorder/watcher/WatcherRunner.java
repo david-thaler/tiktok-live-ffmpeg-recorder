@@ -115,8 +115,9 @@ public class WatcherRunner implements Runnable {
      * @throws URISyntaxException Thrown if unable to construct the URI instance.
      */
     private boolean userIsLive() {
+        HttpResponse<String> response = null;
         try {
-            HttpResponse<String> response = httpClient.send(signedUrlGetter, HttpResponse.BodyHandlers.ofString());
+            response = httpClient.send(signedUrlGetter, HttpResponse.BodyHandlers.ofString());
             Map<String, Object> signedResponse = objectMapper.readValue(response.body(), Map.class);
             String signedUrl = signedResponse.get("signed_url").toString();
             response = httpClient.send(
@@ -132,6 +133,11 @@ public class WatcherRunner implements Runnable {
             return Boolean.parseBoolean(((List<Map>) responseBody.get("data")).getFirst().get("alive").toString());
         } catch (IOException | URISyntaxException | InterruptedException ex) {
             logger.error("Error occurred while querying for live status.", ex);
+        } catch (ClassCastException | NullPointerException ex) {
+            // Should never happen
+            if (response == null) throw ex;
+            logger.error("Error occurred reading response from status check, failure processing body: "
+                    + response.body(), ex);
         }
         return false;
     }
