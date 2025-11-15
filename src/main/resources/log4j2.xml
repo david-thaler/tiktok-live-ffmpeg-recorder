@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <Appenders>
+    <!-- Console appender -->
+    <Console name="Console" target="SYSTEM_OUT">
+      <PatternLayout pattern="[%d{yyyy-MM-dd'T'HH:mm:ss.SSS}{UTC}Z][%-12.12t][%highlight{%-5level}{FATAL=bg_red, ERROR=red, WARN=yellow, INFO=green, DEBUG=cyan, TRACE=blue}] %msg%n" disableAnsi="false"/>
+    </Console>
+
+    <!-- Watcher logging file -->
+    <Routing name="watcherRoutingAppender">
+      <Routes pattern="$${ctx:channel}">
+        <Route>
+          <RollingFile name="Watcher-${ctx:channel}"
+                       fileName="logs/${ctx:channel}.log"
+                       filePattern="logs/${ctx:channel}.log"
+                       immediateFlush="true">
+            <PatternLayout pattern="[%d{yyyy-MM-dd'T'HH:mm:ss.SSS}{UTC}Z][%-5level] %msg%n"/>
+            <Policies>
+              <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="1"/>
+          </RollingFile>
+        </Route>
+      </Routes>
+    </Routing>
+
+    <!-- ffmpeg logging file -->
+    <Routing name="ffmpegRoutingAppender">
+      <Routes pattern="$${ctx.ffmpegFileName}">
+        <Route>
+          <RollingFile name="ffmpeg-log-${ctx:ffmpegFileName}"
+                       fileName="${ctx:ffmpegFileName}.log"
+                       filePattern="${ctx:ffmpegFileName}.log"
+                       immediateFlush="true">
+            <PatternLayout pattern="[%d{yyyy-MM-dd'T'HH:mm:ss.SSS}{UTC}Z][%-5level] %msg%n"/>
+            <Policies>
+              <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="1"/>
+          </RollingFile>
+        </Route>
+      </Routes>
+    </Routing>
+  </Appenders>
+
+  <Loggers>
+    <Root level="info">
+      <AppenderRef ref="Console"/>
+    </Root>
+    <Logger name="watcher" level="info" additivity="true">
+      <AppenderRef ref="watcherRoutingAppender"/>
+    </Logger>
+    <Logger name="ffmpeg" level="info" additivity="false">
+      <AppenderRef ref="ffmpegRoutingAppender"/>
+    </Logger>
+  </Loggers>
+
+</Configuration>

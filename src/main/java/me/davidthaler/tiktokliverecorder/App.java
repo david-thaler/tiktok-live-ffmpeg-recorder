@@ -4,6 +4,8 @@ import me.davidthaler.tiktokliverecorder.config.AppConfig;
 import me.davidthaler.tiktokliverecorder.config.WatcherConfig;
 import me.davidthaler.tiktokliverecorder.watcher.WatcherRunner;
 import org.apache.commons.cli.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.File;
@@ -22,12 +24,15 @@ public class App {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     /** HTTP Client instance. */
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    /** Logger instance. */
+    private static final Logger LOGGER = LoggerFactory.getLogger(App.class);
 
     /**
      * Main starter method. Responsible for configuring all tooling & starting watchers.
      * @param args The command line args.
      */
     static void main(String[] args) {
+        LOGGER.info("Starting Tiktok Live Recorder...");
         Options options = new Options();
         options.addOption("c", "config", true, "Config file path");
         CommandLineParser parser = new DefaultParser();
@@ -35,14 +40,17 @@ public class App {
             CommandLine cmd = parser.parse(options, args);
             String configPath = cmd.getOptionValue("c", "config/config.json");
             File configFile = new File(configPath);
+            LOGGER.info("Loading configuration from [{}] resolved to [{}]", configPath, configFile.getAbsolutePath());
             if (!configFile.exists()) {
                 throw new RuntimeException("Config file does not exist: " + configFile.getAbsolutePath());
             }
             // Load config and spawn watcher jobs.
+            LOGGER.info("Creating Watchers...");
             AppConfig appConfig = OBJECT_MAPPER.readValue(configFile, AppConfig.class);
             try (ScheduledExecutorService executorService =
                          Executors.newScheduledThreadPool(appConfig.watchers().size(), Thread.ofVirtual().factory())) {
                 for (WatcherConfig watcher : appConfig.watchers()) {
+                    LOGGER.info("Spawning watcher job for channel [{}]", watcher.channel());
                     Duration duration = Duration.of(watcher.pollIntervalQty(), watcher.pollIntervalUnit());
                     executorService.scheduleWithFixedDelay(
                             new WatcherRunner(appConfig, watcher, HTTP_CLIENT, OBJECT_MAPPER),

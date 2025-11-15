@@ -47,7 +47,6 @@ public class ConvertToMP4 implements Runnable {
                 }
                 ProcessBuilder pb = new ProcessBuilder(
                         ffmpeg, "-i", file.getAbsolutePath(), "-c", "copy", mp4File.getAbsolutePath());
-                pb.inheritIO();
                 try {
                     Process p = pb.start();
                     p.waitFor();

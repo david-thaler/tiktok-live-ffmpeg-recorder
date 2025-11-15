@@ -2,12 +2,12 @@ package me.davidthaler.tiktokliverecorder.watcher;
 
 import me.davidthaler.tiktokliverecorder.config.AppConfig;
 import me.davidthaler.tiktokliverecorder.config.WatcherConfig;
+import org.apache.logging.log4j.ThreadContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
@@ -40,6 +40,8 @@ public class WatcherRunner implements Runnable {
     private final File OUTPUT_DIRECTORY;
     /** Instance of the Convert to MP4 runner to be executed after every recording. */
     private final ConvertToMP4 CONVERTER_JOB_RUNNER;
+    /** Logger instance for the specific watcher instance. */
+    private Logger logger;
     /** Api url to fetch the signed url for the live status. */
     private static final String SIGNED_URL_GETTER_URL =
         "https://tikrec.com/tiktok/room/api/sign?unique_id=";
@@ -87,13 +89,18 @@ public class WatcherRunner implements Runnable {
     @Override
     public void run() {
             try {
+                String channel = watcherConfig.channel();
+                if (logger == null) {
+                    Thread.currentThread().setName("w-" + channel);
+                    ThreadContext.put("channel", channel);
+                    logger = LoggerFactory.getLogger("watcher");
+                }
                 if (userIsLive()) {
-                    System.out.println("user " + watcherConfig.channel() + " is live");
+                    logger.info("User {} is live.", channel);
                     startRecording();
                 } else {
-                    System.out.println("user " + watcherConfig.channel() + " is NOT live");
-                    System.out.println("Checking again in " + watcherConfig.pollIntervalQty() + " "
-                            + watcherConfig.pollIntervalUnit());
+                    logger.info("User {} is NOT live, checking again in {} {}.",
+                            channel, watcherConfig.pollIntervalQty(), watcherConfig.pollIntervalUnit());
                 }
             } catch (IOException | InterruptedException | URISyntaxException e) {
                 throw new RuntimeException(e);
@@ -152,14 +159,20 @@ public class WatcherRunner implements Runnable {
             params.addAll(copyParams);
             params.addAll(List.of("-strftime", "1", outFile.getAbsolutePath()));
             ProcessBuilder pb = new ProcessBuilder(params);
-            pb.command().forEach(s -> System.out.print(s + " "));
-            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            final StringBuilder sb = new StringBuilder();
+            pb.command().forEach(s -> sb.append(s).append(" "));
+            logger.info("Starting process: {}", sb);
             final Process p = pb.start();
+            if (watcherConfig.logFfmpegOutput()) {
+                final Logger ffmpegLog = LoggerFactory.getLogger("ffmpeg");
+                new Thread(new ProcessLogger(p.getInputStream(), outFile.getAbsolutePath(), ffmpegLog, false)).start();
+                new Thread(new ProcessLogger(p.getErrorStream(), outFile.getAbsolutePath(), ffmpegLog, true)).start();
+            }
             Thread hook = new Thread(() -> {
                 try {
-                    System.out.println("Gracefully shutting down recording for "
-                        + watcherConfig.channel());
+                    String channel = watcherConfig.channel();
+                    ThreadContext.put("channel", channel);
+                    logger.info("Gracefully shutting down recording for {}.", channel);
                     p.getOutputStream().write("q\n".getBytes());
                     p.getOutputStream().flush();
                 } catch (IOException e) {
@@ -199,6 +212,63 @@ public class WatcherRunner implements Runnable {
             }
         }
         return url;
+    }
+
+    /**
+     * Runnable class for logging a processes input stream.
+     */
+    private class ProcessLogger implements Runnable {
+
+        /** The input stream to log. */
+        private final InputStream inputStream;
+        /** The file name for the thread context. */
+        private final String fileName;
+        /** The logger instance to write to. */
+        private final Logger logger;
+        /** Is this reporting an error stream or not? */
+        private final boolean error;
+
+        /**
+         * Default constructor.
+         * @param inputStream The input stream to read.
+         * @param fileName The file name for context.
+         * @param logger The logger instance to write to.
+         * @param error Is this an error stream being reported?
+         */
+        public ProcessLogger(InputStream inputStream, String fileName, Logger logger, boolean error) {
+            this.inputStream = inputStream;
+            this.fileName = fileName;
+            this.logger = logger;
+            this.error = error;
+        }
+
+        /**
+         * Listens to the input stream and writes the output to the log.
+         */
+        @Override
+        public void run() {
+            ThreadContext.put("ffmpegFileName", fileName);
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(inputStream))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    if (line.trim().isEmpty()) continue;
+                    // Skip progress lines like: frame=... fps=... size=... time=...
+                    if (line.startsWith("frame=") || line.startsWith("size=") || line.startsWith("time=") || line.startsWith("bitrate=")) {
+                        continue;
+                    }
+                    // Skip \r-only updates
+                    if (!line.contains("\r")) {
+                        if (error) {
+                            logger.error(line);
+                        } else {
+                            logger.info(line);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                logger.error("Error while writing log stream.", e);
+            }
+        }
     }
 
 }

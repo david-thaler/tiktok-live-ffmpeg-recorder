@@ -44,3 +44,4 @@ build/
 ### App Specific ###
 /config/
 /out/
+/logs/
