@@ -88,13 +88,13 @@ public class WatcherRunner implements Runnable {
      */
     @Override
     public void run() {
+            String channel = watcherConfig.channel();
+            if (logger == null) {
+                Thread.currentThread().setName("w-" + channel);
+                ThreadContext.put("channel", channel);
+                logger = LoggerFactory.getLogger("watcher");
+            }
             try {
-                String channel = watcherConfig.channel();
-                if (logger == null) {
-                    Thread.currentThread().setName("w-" + channel);
-                    ThreadContext.put("channel", channel);
-                    logger = LoggerFactory.getLogger("watcher");
-                }
                 if (userIsLive()) {
                     logger.info("User {} is live.", channel);
                     startRecording();
@@ -102,8 +102,8 @@ public class WatcherRunner implements Runnable {
                     logger.info("User {} is NOT live, checking again in {} {}.",
                             channel, watcherConfig.pollIntervalQty(), watcherConfig.pollIntervalUnit());
                 }
-            } catch (IOException | InterruptedException | URISyntaxException e) {
-                throw new RuntimeException(e);
+            } catch (Exception ex) {
+                logger.error("Unhandled exception was caught.", ex);
             }
     }
 
@@ -114,21 +114,26 @@ public class WatcherRunner implements Runnable {
      * @throws InterruptedException Thrown on error during http call.
      * @throws URISyntaxException Thrown if unable to construct the URI instance.
      */
-    private boolean userIsLive() throws IOException, InterruptedException, URISyntaxException {
-        HttpResponse<String> response = httpClient.send(signedUrlGetter, HttpResponse.BodyHandlers.ofString());
-        Map<String, Object> signedResponse = objectMapper.readValue(response.body(), Map.class);
-        String signedUrl = signedResponse.get("signed_url").toString();
-        response = httpClient.send(
-                HttpRequest.newBuilder(new URI(signedUrl)).build(), HttpResponse.BodyHandlers.ofString());
-        Map<String, Object> responseBody = objectMapper.readValue(response.body(), Map.class);
-        String roomId = ((Map) ((Map) responseBody.getOrDefault("data", Map.of()))
-                .getOrDefault("user", Map.of())).getOrDefault("roomId", "NULL").toString();
-        if (roomId.equals("NULL")) roomId = null;
-        response = httpClient.send(HttpRequest.newBuilder(
-                new URI("https://webcast.tiktok.com/webcast/room/check_alive/?aid=1988&region=CH&room_ids="
-                        + roomId + "&user_is_login=true")).build(), HttpResponse.BodyHandlers.ofString());
-        responseBody = objectMapper.readValue(response.body(), Map.class);
-        return Boolean.parseBoolean(((List<Map>) responseBody.get("data")).getFirst().get("alive").toString());
+    private boolean userIsLive() {
+        try {
+            HttpResponse<String> response = httpClient.send(signedUrlGetter, HttpResponse.BodyHandlers.ofString());
+            Map<String, Object> signedResponse = objectMapper.readValue(response.body(), Map.class);
+            String signedUrl = signedResponse.get("signed_url").toString();
+            response = httpClient.send(
+                    HttpRequest.newBuilder(new URI(signedUrl)).build(), HttpResponse.BodyHandlers.ofString());
+            Map<String, Object> responseBody = objectMapper.readValue(response.body(), Map.class);
+            String roomId = ((Map) ((Map) responseBody.getOrDefault("data", Map.of()))
+                    .getOrDefault("user", Map.of())).getOrDefault("roomId", "NULL").toString();
+            if (roomId.equals("NULL")) roomId = null;
+            response = httpClient.send(HttpRequest.newBuilder(
+                    new URI("https://webcast.tiktok.com/webcast/room/check_alive/?aid=1988&region=CH&room_ids="
+                            + roomId + "&user_is_login=true")).build(), HttpResponse.BodyHandlers.ofString());
+            responseBody = objectMapper.readValue(response.body(), Map.class);
+            return Boolean.parseBoolean(((List<Map>) responseBody.get("data")).getFirst().get("alive").toString());
+        } catch (IOException | URISyntaxException | InterruptedException ex) {
+            logger.error("Error occurred while querying for live status.", ex);
+        }
+        return false;
     }
 
     /**
@@ -175,16 +180,16 @@ public class WatcherRunner implements Runnable {
                     logger.info("Gracefully shutting down recording for {}.", channel);
                     p.getOutputStream().write("q\n".getBytes());
                     p.getOutputStream().flush();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                } catch (IOException ex) {
+                    logger.error("Error occurred while gracefully shutting down ffmpeg.", ex);
                 }
             });
             Runtime.getRuntime().addShutdownHook(hook);
             p.waitFor();
             Runtime.getRuntime().removeShutdownHook(hook);
             new Thread(CONVERTER_JOB_RUNNER).start();
-        } catch (InterruptedException | IOException e) {
-            throw new RuntimeException(e);
+        } catch (InterruptedException | IOException ex) {
+            logger.error("Error occurred while setting up/recording live stream.", ex);
         }
     }
 
@@ -265,8 +270,8 @@ public class WatcherRunner implements Runnable {
                         }
                     }
                 }
-            } catch (IOException e) {
-                logger.error("Error while writing log stream.", e);
+            } catch (IOException ex) {
+                logger.error("Error while writing log stream.", ex);
             }
         }
     }

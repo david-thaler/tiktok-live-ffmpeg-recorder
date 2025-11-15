@@ -42,7 +42,9 @@ public class App {
             File configFile = new File(configPath);
             LOGGER.info("Loading configuration from [{}] resolved to [{}]", configPath, configFile.getAbsolutePath());
             if (!configFile.exists()) {
-                throw new RuntimeException("Config file does not exist: " + configFile.getAbsolutePath());
+                LOGGER.error("Failed to start",
+                        new RuntimeException("Config file does not exist: " + configFile.getAbsolutePath()));
+                System.exit(1);
             }
             // Load config and spawn watcher jobs.
             LOGGER.info("Creating Watchers...");
@@ -63,8 +65,8 @@ public class App {
                     // Do nothing.
                 }
             }
-        } catch (ParseException e) {
-            throw new RuntimeException(e);
+        } catch (ParseException ex) {
+            LOGGER.error("Error parsing config file.", ex);
         }
     }
 }
