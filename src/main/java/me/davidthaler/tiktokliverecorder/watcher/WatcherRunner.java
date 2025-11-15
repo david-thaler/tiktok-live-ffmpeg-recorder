@@ -123,6 +123,14 @@ public class WatcherRunner implements Runnable {
             response = httpClient.send(
                     HttpRequest.newBuilder(new URI(signedUrl)).build(), HttpResponse.BodyHandlers.ofString());
             Map<String, Object> responseBody = objectMapper.readValue(response.body(), Map.class);
+            if (((String) responseBody.getOrDefault("message", "empty"))
+                    .equalsIgnoreCase("user_not_found")) {
+                logger.error("User {} was reported as not found. " +
+                        "If this is the first time watching this user then this message may be correct. " +
+                        "If seen randomly, this could be a sign of a time out and this message can be ignored.",
+                        watcherConfig.channel());
+                return false;
+            }
             String roomId = ((Map) ((Map) responseBody.getOrDefault("data", Map.of()))
                     .getOrDefault("user", Map.of())).getOrDefault("roomId", "NULL").toString();
             if (roomId.equals("NULL")) roomId = null;
