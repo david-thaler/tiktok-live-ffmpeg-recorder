@@ -11,6 +11,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -49,21 +50,13 @@ public class App {
             // Load config and spawn watcher jobs.
             LOGGER.info("Creating Watchers...");
             AppConfig appConfig = OBJECT_MAPPER.readValue(configFile, AppConfig.class);
-            try (ScheduledExecutorService executorService =
-                         Executors.newScheduledThreadPool(appConfig.watchers().size(), Thread.ofVirtual().factory())) {
-                for (WatcherConfig watcher : appConfig.watchers()) {
-                    LOGGER.info("Spawning watcher job for channel [{}]", watcher.channel());
-                    Duration duration = Duration.of(watcher.pollIntervalQty(), watcher.pollIntervalUnit());
-                    executorService.scheduleWithFixedDelay(
-                            new WatcherRunner(appConfig, watcher, HTTP_CLIENT, OBJECT_MAPPER),
-                            0, duration.toMillis(), TimeUnit.MILLISECONDS);
-                }
-                try {
-                    // Keep main thread open to stop the JVM shutting down since virtual threads don't hold the jvm open.
-                    Thread.currentThread().join();
-                } catch (InterruptedException e) {
-                    // Do nothing.
-                }
+            ScheduledExecutorService executorService = Executors.newScheduledThreadPool(appConfig.watchers().size());
+            for (WatcherConfig watcher : appConfig.watchers()) {
+                LOGGER.info("Spawning watcher job for channel [{}]", watcher.channel());
+                Duration duration = Duration.of(watcher.pollIntervalQty(), watcher.pollIntervalUnit());
+                executorService.scheduleWithFixedDelay(
+                        new WatcherRunner(appConfig, watcher, HTTP_CLIENT, OBJECT_MAPPER),
+                        0, duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         } catch (ParseException ex) {
             LOGGER.error("Error parsing config file.", ex);
