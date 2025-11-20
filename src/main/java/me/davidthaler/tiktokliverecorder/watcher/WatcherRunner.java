@@ -88,13 +88,13 @@ public class WatcherRunner implements Runnable {
      */
     @Override
     public void run() {
-            String channel = watcherConfig.channel();
-            if (logger == null) {
-                Thread.currentThread().setName("w-" + channel);
-                ThreadContext.put("channel", channel);
-                logger = LoggerFactory.getLogger("watcher");
-            }
             try {
+                String channel = watcherConfig.channel();
+                if (logger == null) {
+                    Thread.currentThread().setName("w-" + channel);
+                    ThreadContext.put("channel", channel);
+                    logger = LoggerFactory.getLogger("watcher");
+                }
                 if (userIsLive()) {
                     logger.info("User {} is live.", channel);
                     startRecording();
@@ -102,8 +102,13 @@ public class WatcherRunner implements Runnable {
                     logger.info("User {} is NOT live, checking again in {} {}.",
                             channel, watcherConfig.pollIntervalQty(), watcherConfig.pollIntervalUnit());
                 }
-            } catch (Exception ex) {
-                logger.error("Unhandled exception was caught.", ex);
+            } catch (Throwable ex) {
+                if (logger != null) {
+                    logger.error("Unhandled exception was caught.", ex);
+                } else {
+                    System.out.println("Error detected before logger initialised.");
+                    ex.printStackTrace();
+                }
             }
     }
 
@@ -176,16 +181,18 @@ public class WatcherRunner implements Runnable {
                 copyParams = List.of("-c", "copy");
             }
             params.addAll(copyParams);
-            params.addAll(List.of("-strftime", "1", outFile.getAbsolutePath()));
+            String fileName = outFile.getAbsolutePath();
+            params.addAll(List.of("-strftime", "1", fileName));
             ProcessBuilder pb = new ProcessBuilder(params);
             final StringBuilder sb = new StringBuilder();
             pb.command().forEach(s -> sb.append(s).append(" "));
             logger.info("Starting process: {}", sb);
             final Process p = pb.start();
             if (watcherConfig.logFfmpegOutput()) {
+                ThreadContext.put("ffmpegFileName", fileName);
                 final Logger ffmpegLog = LoggerFactory.getLogger("ffmpeg");
-                new Thread(new ProcessLogger(p.getInputStream(), outFile.getAbsolutePath(), ffmpegLog, false)).start();
-                new Thread(new ProcessLogger(p.getErrorStream(), outFile.getAbsolutePath(), ffmpegLog, true)).start();
+                new Thread(new ProcessLogger(p.getInputStream(), fileName, ffmpegLog, false)).start();
+                new Thread(new ProcessLogger(p.getErrorStream(), fileName, ffmpegLog, true)).start();
             }
             Thread hook = new Thread(() -> {
                 try {

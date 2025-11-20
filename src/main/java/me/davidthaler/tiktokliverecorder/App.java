@@ -11,7 +11,6 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.net.http.HttpClient;
 import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,9 +23,13 @@ public class App {
     /** Object mapper instance. */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     /** HTTP Client instance. */
-    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final HttpClient HTTP_CLIENT;
     /** Logger instance. */
     private static final Logger LOGGER = LoggerFactory.getLogger(App.class);
+
+    static {
+        HTTP_CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    }
 
     /**
      * Main starter method. Responsible for configuring all tooling & starting watchers.
