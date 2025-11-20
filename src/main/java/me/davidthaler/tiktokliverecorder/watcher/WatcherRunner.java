@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ public class WatcherRunner implements Runnable {
     /** Date formatter for putting timestamps on file names. */
     private static final DateTimeFormatter DATE_FORMATTER =
         DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
+    private static final Duration TIMEOUT_DURATION = Duration.ofSeconds(10);
 
     /**
      * Default constructor.
@@ -65,7 +67,8 @@ public class WatcherRunner implements Runnable {
         try {
             signedUrlGetter = HttpRequest.newBuilder(
                     new URI(SIGNED_URL_GETTER_URL +
-                            URLEncoder.encode(watcherConfig.channel(), Charset.defaultCharset()))).build();
+                            URLEncoder.encode(watcherConfig.channel(), Charset.defaultCharset())))
+                    .timeout(TIMEOUT_DURATION).build();
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
@@ -126,7 +129,8 @@ public class WatcherRunner implements Runnable {
             Map<String, Object> signedResponse = objectMapper.readValue(response.body(), Map.class);
             String signedUrl = signedResponse.get("signed_url").toString();
             response = httpClient.send(
-                    HttpRequest.newBuilder(new URI(signedUrl)).build(), HttpResponse.BodyHandlers.ofString());
+                    HttpRequest.newBuilder(new URI(signedUrl)).timeout(TIMEOUT_DURATION).build(),
+                    HttpResponse.BodyHandlers.ofString());
             Map<String, Object> responseBody = objectMapper.readValue(response.body(), Map.class);
             if (((String) responseBody.getOrDefault("message", "empty"))
                     .equalsIgnoreCase("user_not_found")) {
@@ -141,7 +145,8 @@ public class WatcherRunner implements Runnable {
             if (roomId.equals("NULL")) roomId = null;
             response = httpClient.send(HttpRequest.newBuilder(
                     new URI("https://webcast.tiktok.com/webcast/room/check_alive/?aid=1988&region=CH&room_ids="
-                            + roomId + "&user_is_login=true")).build(), HttpResponse.BodyHandlers.ofString());
+                            + roomId + "&user_is_login=true")).timeout(TIMEOUT_DURATION).build(),
+                    HttpResponse.BodyHandlers.ofString());
             responseBody = objectMapper.readValue(response.body(), Map.class);
             return Boolean.parseBoolean(((List<Map>) responseBody.get("data")).getFirst().get("alive").toString());
         } catch (IOException | URISyntaxException | InterruptedException ex) {
